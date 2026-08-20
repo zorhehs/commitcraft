@@ -1,0 +1,14 @@
+# Binaries
+/commitcraft
+/bin/
+/dist/
+
+# Go build/test artifacts
+*.test
+*.out
+coverage.txt
+
+# OS/editor cruft
+.DS_Store
+.vscode/
+.idea/
