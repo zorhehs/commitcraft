@@ -72,6 +72,34 @@ func TestGenerate(t *testing.T) {
 			},
 			wantPrefix: "feat(a): add 1, update 1, remove 1 files",
 		},
+		{
+			name: "small modification stays fix",
+			files: []gitutil.FileChange{
+				{Path: "src/app.py", Status: "M", Additions: 10, Deletions: 5},
+			},
+			wantPrefix: "fix",
+		},
+		{
+			name: "large modification becomes feat",
+			files: []gitutil.FileChange{
+				{Path: "src/app.py", Status: "M", Additions: 200, Deletions: 24},
+			},
+			wantPrefix: "feat(src): update src/app.py",
+		},
+		{
+			name: "modification exactly at threshold becomes feat",
+			files: []gitutil.FileChange{
+				{Path: "src/app.py", Status: "M", Additions: 40, Deletions: 10},
+			},
+			wantPrefix: "feat",
+		},
+		{
+			name: "modification just under threshold stays fix",
+			files: []gitutil.FileChange{
+				{Path: "src/app.py", Status: "M", Additions: 30, Deletions: 19},
+			},
+			wantPrefix: "fix",
+		},
 	}
 
 	g := New()
