@@ -50,11 +50,20 @@ func TestGenerate(t *testing.T) {
 			wantPrefix: "docs:",
 		},
 		{
-			name: "ci workflow files get ci type",
+			name: "ci workflow files get ci type when that's the whole change",
 			files: []gitutil.FileChange{
 				{Path: ".github/workflows/ci.yml", Status: "A"},
 			},
 			wantPrefix: "ci",
+		},
+		{
+			name: "a CI file among mostly new source files does not force ci type",
+			files: []gitutil.FileChange{
+				{Path: "cmd/app/main.go", Status: "A"},
+				{Path: "internal/foo/foo.go", Status: "A"},
+				{Path: ".github/workflows/ci.yml", Status: "A"},
+			},
+			wantPrefix: "feat",
 		},
 		{
 			name: "deleted only file with no additions is chore",
