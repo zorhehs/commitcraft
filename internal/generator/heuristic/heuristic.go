@@ -51,14 +51,13 @@ func inferType(files []gitutil.FileChange) string {
 	var (
 		allTest            = true
 		allDocs            = true
+		allCI              = true
 		hasNewFile         = false
 		hasDeleted         = false
-		hasCI              = false
 		totalModifiedLines = 0
 	)
 
 	for _, f := range files {
-		base := path.Base(f.Path)
 		lower := strings.ToLower(f.Path)
 
 		if !isTestFile(lower) {
@@ -67,8 +66,8 @@ func inferType(files []gitutil.FileChange) string {
 		if !isDocFile(lower) {
 			allDocs = false
 		}
-		if strings.Contains(lower, ".github/workflows") || base == "Makefile" || strings.HasSuffix(lower, ".yml") && strings.Contains(lower, "ci") {
-			hasCI = true
+		if !isCIFile(lower) {
+			allCI = false
 		}
 		switch f.Status {
 		case "A":
@@ -85,7 +84,7 @@ func inferType(files []gitutil.FileChange) string {
 		return "test"
 	case allDocs:
 		return "docs"
-	case hasCI:
+	case allCI:
 		return "ci"
 	case hasDeleted && !hasNewFile:
 		return "chore"
@@ -110,6 +109,13 @@ func isDocFile(lowerPath string) bool {
 	return strings.HasSuffix(lowerPath, ".md") ||
 		strings.HasSuffix(lowerPath, ".rst") ||
 		strings.HasPrefix(lowerPath, "docs/")
+}
+
+func isCIFile(lowerPath string) bool {
+	base := path.Base(lowerPath)
+	return strings.Contains(lowerPath, ".github/workflows") ||
+		base == "makefile" ||
+		(strings.HasSuffix(lowerPath, ".yml") && strings.Contains(lowerPath, "ci"))
 }
 
 // inferScope picks a short scope name from the deepest common directory
