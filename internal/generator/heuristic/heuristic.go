@@ -24,6 +24,12 @@ func New() *Generator {
 
 func (g *Generator) Name() string { return "heuristic" }
 
+// largeChangeThreshold is the total number of changed lines (additions +
+// deletions) across modified-only files above which we treat the change
+// as substantial enough to be "feat" rather than "fix". A one-line typo
+// fix and a 200-line rewrite should not both be labeled "fix".
+const largeChangeThreshold = 50
+
 // Generate drafts a Conventional Commits message from the staged diff
 // using only path/status heuristics — no network, no LLM.
 func (g *Generator) Generate(diff *gitutil.StagedDiff) (generator.Message, error) {
@@ -43,11 +49,12 @@ func (g *Generator) Generate(diff *gitutil.StagedDiff) (generator.Message, error
 // files. Rules are checked in priority order; the first match wins.
 func inferType(files []gitutil.FileChange) string {
 	var (
-		allTest    = true
-		allDocs    = true
-		hasNewFile = false
-		hasDeleted = false
-		hasCI      = false
+		allTest            = true
+		allDocs            = true
+		hasNewFile         = false
+		hasDeleted         = false
+		hasCI              = false
+		totalModifiedLines = 0
 	)
 
 	for _, f := range files {
@@ -68,6 +75,8 @@ func inferType(files []gitutil.FileChange) string {
 			hasNewFile = true
 		case "D":
 			hasDeleted = true
+		case "M":
+			totalModifiedLines += f.Additions + f.Deletions
 		}
 	}
 
@@ -81,6 +90,8 @@ func inferType(files []gitutil.FileChange) string {
 	case hasDeleted && !hasNewFile:
 		return "chore"
 	case hasNewFile:
+		return "feat"
+	case totalModifiedLines >= largeChangeThreshold:
 		return "feat"
 	default:
 		return "fix"
