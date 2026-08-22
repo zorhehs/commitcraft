@@ -37,22 +37,22 @@ go build -o commitcraft ./cmd/commitcraft
 
 ```
 git add <files>
-commitcraft              # print a suggested commit message
-commitcraft --body       # also print a bulleted summary of each file
-commitcraft --apply      # show the message, confirm, then `git commit` directly
+commitcraft                        # heuristic backend (default), fully offline
+commitcraft --body                 # also print a bulleted summary of each file
+commitcraft --apply                # show the message, confirm, then `git commit` directly
+commitcraft --backend ollama       # use a local LLM via Ollama instead of heuristics
+commitcraft --backend ollama --model phi3   # pick a different pulled Ollama model
 commitcraft --version
 ```
 
+If `--backend ollama` is passed but no Ollama server is reachable at
+`localhost:11434`, commitcraft prints a warning and falls back to the
+heuristic backend automatically — it never just fails outright.
+
 ## How it works
 
-commitcraft never sends your code anywhere. The default (and currently
-only) backend is **heuristic**: it reads file paths, git statuses
-(added/modified/deleted), and diff size, and applies a handful of rules
-to pick a Conventional Commits type (`feat`, `fix`, `docs`, `test`, `ci`,
-`chore`) and scope. See [`internal/generator/heuristic`](internal/generator/heuristic)
-for the exact rules.
-
-The message generator is a small interface
+commitcraft never sends your code anywhere by default. It has two
+backends behind a small shared interface
 ([`internal/generator`](internal/generator)):
 
 ```go
@@ -62,17 +62,37 @@ type Generator interface {
 }
 ```
 
-This is intentional: a future backend that calls a **local LLM via
-[Ollama](https://ollama.com)** for higher-quality messages can be added
-as a second implementation of this interface without touching `main.go`,
-`gitutil`, or the CLI flags. See [Roadmap](#roadmap).
+**heuristic** (default) — reads file paths, git statuses
+(added/modified/deleted), and diff size, and applies a handful of rules
+to pick a Conventional Commits type (`feat`, `fix`, `docs`, `test`,
+`ci`, `chore`) and scope. Instant, dependency-free, works with zero
+setup. See [`internal/generator/heuristic`](internal/generator/heuristic)
+for the exact rules.
+
+**ollama** (opt-in via `--backend ollama`) — sends the staged diff to a
+model running locally through [Ollama](https://ollama.com) and asks it
+to draft a Conventional Commits message. Requires Ollama installed and
+a model pulled (`ollama pull llama3.2:1b`), but still runs entirely on
+your machine — no API key, no network egress. If Ollama isn't running,
+commitcraft falls back to heuristic automatically. See
+[`internal/generator/ollama`](internal/generator/ollama).
+
+Because both implement the same interface, adding a third backend later
+(say, a hosted API) is a matter of writing one more small package —
+`main.go`, `gitutil`, and the CLI flags don't need to change.
 
 ## Roadmap
 
 - [x] `v0.1` — heuristic backend, `--body`, `--apply`
-- [ ] `v0.2` — optional Ollama backend (`--backend ollama`), config file for model choice
+- [x] `v0.2` — optional Ollama backend (`--backend ollama`, `--model`), graceful fallback when Ollama isn't running
 - [ ] `v0.3` — `--pr` flag to draft a fuller pull request description
 - [ ] `v1.0` — tagged release with prebuilt binaries via GoReleaser
+
+Known limitations, tracked as issues:
+- Heuristic scope detection can be noisy across unrelated directories
+- Ollama output quality depends heavily on the chosen model — small
+  models (e.g. `llama3.2:1b`) are fast but don't always follow the
+  formatting instructions precisely
 
 ## Contributing
 
