@@ -10,6 +10,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/zorhehs/commitcraft/internal/generator"
 	"github.com/zorhehs/commitcraft/internal/generator/heuristic"
+	"github.com/zorhehs/commitcraft/internal/generator/ollama"
 	"github.com/zorhehs/commitcraft/internal/gitutil"
 )
 
@@ -35,6 +37,8 @@ func run(args []string) error {
 	showBody := fs.Bool("body", false, "also print a bulleted body describing each changed file")
 	apply := fs.Bool("apply", false, "run `git commit` with the generated message instead of just printing it")
 	showVersion := fs.Bool("version", false, "print the commitcraft version and exit")
+	backend := fs.String("backend", "heuristic", "message backend: \"heuristic\" (offline) or \"ollama\" (local LLM via Ollama)")
+	model := fs.String("model", "", "Ollama model to use with --backend ollama (default: "+ollama.DefaultModel+")")
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, "commitcraft drafts a commit message from your staged git diff.")
 		fmt.Fprintln(os.Stderr, "\nUsage:")
@@ -61,7 +65,7 @@ func run(args []string) error {
 		return err
 	}
 
-	gen := selectGenerator()
+	gen := selectGenerator(*backend, *model)
 	msg, err := gen.Generate(diff)
 	if err != nil {
 		return fmt.Errorf("%s backend: %w", gen.Name(), err)
@@ -75,11 +79,23 @@ func run(args []string) error {
 	return nil
 }
 
-// selectGenerator picks a backend. Today there is only the heuristic
-// (offline) backend; this is the single seam where an Ollama-backed
-// generator gets added later without touching the rest of main.
-func selectGenerator() generator.Generator {
-	return heuristic.New()
+// selectGenerator picks a backend based on the --backend flag. If
+// "ollama" is requested but no Ollama server is reachable, it prints a
+// warning to stderr and falls back to the heuristic backend rather than
+// failing outright — commitcraft should always produce *something*.
+func selectGenerator(backend, model string) generator.Generator {
+	switch backend {
+	case "ollama":
+		g := ollama.New("", model)
+		if g.IsAvailable(context.Background()) {
+			return g
+		}
+		fmt.Fprintf(os.Stderr, "commitcraft: ollama backend requested but no server found at %s — falling back to heuristic\n", g.BaseURL)
+		fmt.Fprintln(os.Stderr, "commitcraft: install Ollama from https://ollama.com and run `ollama pull "+ollama.DefaultModel+"` to enable it")
+		return heuristic.New()
+	default:
+		return heuristic.New()
+	}
 }
 
 func printMessage(msg generator.Message, showBody bool) {
